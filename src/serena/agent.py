@@ -552,6 +552,7 @@ class SerenaAgent:
             ls_timeout=ls_timeout,
             trace_lsp_communication=self.serena_config.trace_lsp_communication,
             ls_specific_settings=self.serena_config.ls_specific_settings,
+            ls_idle_timeout=self.serena_config.ls_idle_timeout,
         )
 
     def add_language(self, language: Language) -> None:

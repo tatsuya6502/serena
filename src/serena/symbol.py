@@ -477,7 +477,10 @@ class LanguageServerSymbolRetriever:
         to symbols within a specific file or directory.
         """
         symbols: list[LanguageServerSymbol] = []
-        for lang_server in self._ls_manager.iter_language_servers():
+
+        # If within_relative_path is specified, use get_language_server to trigger lazy initialization
+        if within_relative_path:
+            lang_server = self.get_language_server(within_relative_path)
             symbol_roots = lang_server.request_full_symbol_tree(within_relative_path=within_relative_path, include_body=include_body)
             for root in symbol_roots:
                 symbols.extend(
@@ -485,6 +488,16 @@ class LanguageServerSymbolRetriever:
                         name_path, include_kinds=include_kinds, exclude_kinds=exclude_kinds, substring_matching=substring_matching
                     )
                 )
+        else:
+            # For global search, iterate over all running language servers
+            for lang_server in self._ls_manager.iter_language_servers():
+                symbol_roots = lang_server.request_full_symbol_tree(within_relative_path=None, include_body=include_body)
+                for root in symbol_roots:
+                    symbols.extend(
+                        LanguageServerSymbol(root).find(
+                            name_path, include_kinds=include_kinds, exclude_kinds=exclude_kinds, substring_matching=substring_matching
+                        )
+                    )
         return symbols
 
     def get_document_symbols(self, relative_path: str) -> list[LanguageServerSymbol]:

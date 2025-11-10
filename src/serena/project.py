@@ -364,15 +364,18 @@ class Project(ToStringMixin):
         ls_timeout: float | None = DEFAULT_TOOL_TIMEOUT - 5,
         trace_lsp_communication: bool = False,
         ls_specific_settings: dict[Language, Any] | None = None,
+        ls_idle_timeout: int = 300,
     ) -> LanguageServerManager:
         """
         Creates the language server manager for the project, starting one language server per configured programming language.
+        Lazy languages are not started immediately but on first use.
 
         :param log_level: the log level for the language server
         :param ls_timeout: the timeout for the language server
         :param trace_lsp_communication: whether to trace LSP communication
         :param ls_specific_settings: optional LS specific configuration of the language server,
             see docstrings in the inits of subclasses of SolidLanguageServer to see what values may be passed.
+        :param ls_idle_timeout: seconds of inactivity before stopping lazy language servers (0 = disabled)
         :return: the language server manager, which is also stored in the project instance
         """
         # if there is an existing instance, stop its language servers first
@@ -391,7 +394,21 @@ class Project(ToStringMixin):
             log_level=log_level,
             trace_lsp_communication=trace_lsp_communication,
         )
-        self.language_server_manager = LanguageServerManager.from_languages(self.project_config.languages, factory)
+
+        # Convert lazy language strings to Language enum
+        lazy_languages = set()
+        for lang_str in self.project_config.lazy_languages:
+            try:
+                lang_str = lang_str.lower()
+                if lang_str == "javascript":
+                    lang_str = "typescript"
+                lazy_languages.add(Language(lang_str))
+            except ValueError:
+                log.warning(f"Invalid lazy language '{lang_str}' in project config, ignoring")
+
+        self.language_server_manager = LanguageServerManager.from_languages(
+            self.project_config.languages, factory, lazy_languages=lazy_languages, idle_timeout=ls_idle_timeout
+        )
         return self.language_server_manager
 
     def add_language(self, language: Language) -> None:

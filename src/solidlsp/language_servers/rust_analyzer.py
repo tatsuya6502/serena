@@ -8,6 +8,7 @@ import pathlib
 import shutil
 import subprocess
 import threading
+import time
 
 from overrides import override
 
@@ -96,6 +97,9 @@ class RustAnalyzer(SolidLanguageServer):
         self.service_ready_event = threading.Event()
         self.initialize_searcher_command_available = threading.Event()
         self.resolve_main_method_available = threading.Event()
+        self.indexing_done = threading.Event()  # Tracks when initial indexing completes
+        self._progress_tokens: set[str] = set()  # Track active progress operations
+        self._progress_lock = threading.Lock()  # Protect progress token set
 
     @override
     def is_ignored_dirname(self, dirname: str) -> bool:
@@ -579,6 +583,10 @@ class RustAnalyzer(SolidLanguageServer):
         """
         Starts the Rust Analyzer Language Server
         """
+        # Reset progress tracking state for this server start
+        self.indexing_done.clear()
+        with self._progress_lock:
+            self._progress_tokens.clear()
 
         def register_capability_handler(params):
             assert "registrations" in params
@@ -598,8 +606,32 @@ class RustAnalyzer(SolidLanguageServer):
         def execute_client_command_handler(params):
             return []
 
-        def do_nothing(params):
-            return
+        def progress_handler(params):
+            """
+            Track $/progress notifications to determine when indexing is complete.
+            rust-analyzer sends progress notifications like:
+            - {"token": "...", "value": {"kind": "begin", "title": "Indexing", ...}}
+            - {"token": "...", "value": {"kind": "end", ...}}
+            """
+            token = params.get("token")
+            value = params.get("value", {})
+            kind = value.get("kind")
+
+            if not token:
+                return
+
+            with self._progress_lock:
+                if kind == "begin":
+                    self._progress_tokens.add(token)
+                    self.logger.log(f"Progress started: {value.get('title', token)}", logging.DEBUG)
+                elif kind == "end":
+                    self._progress_tokens.discard(token)
+                    self.logger.log(f"Progress ended: {token}", logging.DEBUG)
+
+                    # If all progress operations are done and we haven't set indexing_done yet
+                    if not self._progress_tokens and not self.indexing_done.is_set():
+                        self.logger.log("All progress operations complete, indexing done", logging.INFO)
+                        self.indexing_done.set()
 
         def check_experimental_status(params):
             if params["quiescent"] == True:
@@ -608,11 +640,14 @@ class RustAnalyzer(SolidLanguageServer):
         def window_log_message(msg):
             self.logger.log(f"LSP: window/logMessage: {msg}", logging.INFO)
 
+        def do_nothing(params):
+            return
+
         self.server.on_request("client/registerCapability", register_capability_handler)
         self.server.on_notification("language/status", lang_status_handler)
         self.server.on_notification("window/logMessage", window_log_message)
         self.server.on_request("workspace/executeClientCommand", execute_client_command_handler)
-        self.server.on_notification("$/progress", do_nothing)
+        self.server.on_notification("$/progress", progress_handler)
         self.server.on_notification("textDocument/publishDiagnostics", do_nothing)
         self.server.on_notification("language/actionableNotification", do_nothing)
         self.server.on_notification("experimental/serverStatus", check_experimental_status)
@@ -636,4 +671,33 @@ class RustAnalyzer(SolidLanguageServer):
         self.server.notify.initialized({})
         self.completions_available.set()
 
+        # Wait for server to report quiescent status
+        self.logger.log("Waiting for server to become ready (quiescent)...", logging.INFO)
         self.server_ready.wait()
+        self.logger.log("Server is quiescent, checking indexing status...", logging.INFO)
+
+        # Check if indexing is already done (progress notifications came before quiescent)
+        if self.indexing_done.is_set():
+            self.logger.log("Indexing already complete (finished before quiescent)", logging.INFO)
+        else:
+            # Check if we received any progress notifications at all
+            with self._progress_lock:
+                received_progress = len(self._progress_tokens) > 0 or self.indexing_done.is_set()
+
+            if not received_progress:
+                # For small projects, rust-analyzer might not send progress notifications
+                # Wait a short time after quiescent to be safe
+                self.logger.log("No progress notifications received, waiting 2 seconds after quiescent...", logging.INFO)
+                time.sleep(2)
+                self.indexing_done.set()
+                self.logger.log("Assuming indexing complete for small project", logging.INFO)
+            else:
+                # Wait for all progress operations to complete (with timeout)
+                # This ensures indexing is truly done
+                self.logger.log("Waiting for progress operations to complete...", logging.INFO)
+                indexing_complete = self.indexing_done.wait(timeout=600)  # 10 minute timeout for large projects
+                if indexing_complete:
+                    self.logger.log("Indexing complete, rust-analyzer is fully ready", logging.INFO)
+                else:
+                    self.logger.log("Timeout waiting for indexing completion, proceeding anyway", logging.WARNING)
+                    self.indexing_done.set()  # Set it anyway to avoid blocking future operations

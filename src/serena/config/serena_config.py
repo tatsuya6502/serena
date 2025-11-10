@@ -171,6 +171,8 @@ class ProjectConfig(ToolInclusionDefinition, ToStringMixin):
     ignore_all_files_in_gitignore: bool = True
     initial_prompt: str = ""
     encoding: str = DEFAULT_SOURCE_FILE_ENCODING
+    lazy_languages: list[str] = field(default_factory=list)
+    ls_idle_timeout: int = 300  # 5 minutes default
 
     SERENA_DEFAULT_PROJECT_FILE = "project.yml"
 
@@ -236,6 +238,8 @@ class ProjectConfig(ToolInclusionDefinition, ToStringMixin):
         data["ignore_all_files_in_gitignore"] = data.get("ignore_all_files_in_gitignore", True)
         data["initial_prompt"] = data.get("initial_prompt", "")
         data["encoding"] = data.get("encoding", DEFAULT_SOURCE_FILE_ENCODING)
+        data["lazy_languages"] = data.get("lazy_languages", [])
+        data["ls_idle_timeout"] = data.get("ls_idle_timeout", 300)
 
         # backward compatibility: handle single "language" field
         if len(data["languages"]) == 0 and "language" in data:
@@ -285,6 +289,8 @@ class ProjectConfig(ToolInclusionDefinition, ToStringMixin):
             ignore_all_files_in_gitignore=data["ignore_all_files_in_gitignore"],
             initial_prompt=data["initial_prompt"],
             encoding=data["encoding"],
+            lazy_languages=data["lazy_languages"],
+            ls_idle_timeout=data["ls_idle_timeout"],
         )
 
     def to_yaml_dict(self) -> dict:
@@ -376,6 +382,12 @@ class SerenaConfig(ToolInclusionDefinition, ToStringMixin):
     web_dashboard: bool = True
     web_dashboard_open_on_launch: bool = True
     tool_timeout: float = DEFAULT_TOOL_TIMEOUT
+    ls_idle_timeout: int = 300  # 5 minutes default
+    """
+    timeout, in seconds, after which idle language servers are automatically stopped.
+    This applies only to languages configured as "lazy" in project.yml.
+    Default: 300 (5 minutes). Set to 0 to disable auto-shutdown.
+    """
     loaded_commented_yaml: CommentedMap | None = None
     config_file_path: str | None = None
     """
@@ -497,6 +509,7 @@ class SerenaConfig(ToolInclusionDefinition, ToStringMixin):
         instance.web_dashboard = loaded_commented_yaml.get("web_dashboard", True)
         instance.web_dashboard_open_on_launch = loaded_commented_yaml.get("web_dashboard_open_on_launch", True)
         instance.tool_timeout = loaded_commented_yaml.get("tool_timeout", DEFAULT_TOOL_TIMEOUT)
+        instance.ls_idle_timeout = loaded_commented_yaml.get("ls_idle_timeout", 300)
         instance.trace_lsp_communication = loaded_commented_yaml.get("trace_lsp_communication", False)
         instance.excluded_tools = loaded_commented_yaml.get("excluded_tools", [])
         instance.included_optional_tools = loaded_commented_yaml.get("included_optional_tools", [])

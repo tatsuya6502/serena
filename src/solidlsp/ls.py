@@ -1683,9 +1683,17 @@ class SolidLanguageServer(ABC):
     def start(self) -> "SolidLanguageServer":
         """
         Starts the language server process and connects to it. Call shutdown when ready.
+        Idempotent: safe to call multiple times, will not restart if already running.
 
         :return: self for method chaining
         """
+        if self.is_running():
+            self.logger.log(
+                f"Language server for {self.language_server.language} is already running, skipping start",
+                logging.DEBUG,
+            )
+            return self
+
         self.logger.log(
             f"Starting language server with language {self.language_server.language} for {self.language_server.repository_root_path}",
             logging.INFO,

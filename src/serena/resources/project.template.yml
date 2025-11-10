@@ -29,6 +29,20 @@ ignore_all_files_in_gitignore: true
 # Added (renamed) on 2025-04-07
 ignored_paths: []
 
+# list of languages to initialize lazily (only start when first needed)
+# Useful for resource-heavy language servers like rust-analyzer
+# These servers will automatically stop after being idle for the configured timeout
+# Example: ["rust", "cpp"]
+# Added on 2025-11-10
+lazy_languages: []
+
+# timeout in seconds before stopping idle lazy language servers (0 = never stop)
+# Only applies to languages listed in lazy_languages
+# This can be overridden globally in serena_config.yml
+# Default: 300 (5 minutes)
+# Added on 2025-11-10
+ls_idle_timeout: 300
+
 # whether the project is in read-only mode
 # If set to true, all editing tools will be disabled and attempts to use them will result in an error
 # Added on 2025-04-18
@@ -36,7 +50,7 @@ read_only: false
 
 # list of tool names to exclude. We recommend not excluding any tools, see the readme for more details.
 # Below is the complete list of tools for convenience.
-# To make sure you have the latest list of tools, and to view their descriptions, 
+# To make sure you have the latest list of tools, and to view their descriptions,
 # execute `uv run scripts/print_tool_overview.py`.
 #
 #  * `activate_project`: Activates a project by name.
