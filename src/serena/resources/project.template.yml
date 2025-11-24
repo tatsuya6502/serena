@@ -20,8 +20,13 @@ languages: ["python"]
 encoding: "utf-8"
 
 # Memory profile for rust-analyzer (only applies if 'rust' is in the languages list)
-# Options: "performance" (default, all features enabled), "balanced" (moderate memory usage),
-#          "low-memory" (minimal memory footprint)
+# Options:
+#   - "performance" (default): All features enabled, highest memory usage
+#   - "balanced": Moderate memory usage with all core features working
+#   - "low-memory": Minimal memory usage
+#                   WARNING: Disables build scripts (build.rs) - may cause incomplete
+#                   symbol information for projects using code generation (protobuf,
+#                   FFI bindings, etc.)
 # If not specified, defaults to "performance"
 # Added on 2025-11-24
 # rust_analyzer_profile: "balanced"

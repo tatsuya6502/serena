@@ -32,7 +32,8 @@ class TestRustAnalyzerProfiles:
         assert settings["cachePriming"]["enable"] is False
         assert settings["lru"]["capacity"] == 32
         assert settings["cargo"]["buildScripts"]["enable"] is False
-        assert settings["procMacro"]["enable"] is False
+        # procMacro should NOT be disabled (keeping it enabled for symbol operations)
+        assert "procMacro" not in settings
         assert settings["checkOnSave"] is False
         assert settings["check"]["allTargets"] is False
 

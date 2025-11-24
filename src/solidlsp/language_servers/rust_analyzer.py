@@ -38,6 +38,13 @@ class RustAnalyzer(SolidLanguageServer):
         """
         Get rust-analyzer initialization settings for the specified memory profile.
 
+        Profiles:
+        - "performance": All features enabled (default)
+        - "balanced": Moderate memory usage with all core features working
+        - "low-memory": Minimal memory usage
+                       WARNING: Disables build scripts, which may break symbol
+                       operations for projects using code generation
+
         :param profile: Profile name ("performance", "balanced", or "low-memory")
         :return: Dictionary of settings to merge into initializationOptions
         """
@@ -61,12 +68,14 @@ class RustAnalyzer(SolidLanguageServer):
             }
 
         else:  # RustAnalyzerProfile.LOW_MEMORY
-            # Minimal memory footprint - disable expensive features
+            # Reduced memory footprint while preserving core symbol operations
+            # WARNING: Disables build scripts - projects using code generation (build.rs)
+            # may experience incomplete symbol information and missing references for
+            # generated code (e.g., protobuf bindings, FFI wrappers)
             return {
                 "cachePriming": {"enable": False},
                 "lru": {"capacity": 32},
                 "cargo": {"buildScripts": {"enable": False}},
-                "procMacro": {"enable": False},
                 "checkOnSave": False,
                 "check": {"allTargets": False},
             }
