@@ -106,6 +106,7 @@ class ProjectConfig(ToolInclusionDefinition, ToStringMixin):
     ignore_all_files_in_gitignore: bool = True
     initial_prompt: str = ""
     encoding: str = DEFAULT_SOURCE_FILE_ENCODING
+    rust_analyzer_profile: str | None = None
 
     SERENA_DEFAULT_PROJECT_FILE = "project.yml"
 
@@ -200,6 +201,7 @@ class ProjectConfig(ToolInclusionDefinition, ToStringMixin):
         data["ignore_all_files_in_gitignore"] = data.get("ignore_all_files_in_gitignore", True)
         data["initial_prompt"] = data.get("initial_prompt", "")
         data["encoding"] = data.get("encoding", DEFAULT_SOURCE_FILE_ENCODING)
+        data["rust_analyzer_profile"] = data.get("rust_analyzer_profile", None)
 
         # backward compatibility: handle single "language" field
         if len(data["languages"]) == 0 and "language" in data:
@@ -252,6 +254,7 @@ class ProjectConfig(ToolInclusionDefinition, ToStringMixin):
             ignore_all_files_in_gitignore=data["ignore_all_files_in_gitignore"],
             initial_prompt=data["initial_prompt"],
             encoding=data["encoding"],
+            rust_analyzer_profile=data["rust_analyzer_profile"],
         )
 
     def to_yaml_dict(self) -> dict:

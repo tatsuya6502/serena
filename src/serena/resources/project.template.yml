@@ -19,6 +19,13 @@ languages: ["python"]
 # For a list of possible encodings, see https://docs.python.org/3.11/library/codecs.html#standard-encodings
 encoding: "utf-8"
 
+# Memory profile for rust-analyzer (only applies if 'rust' is in the languages list)
+# Options: "performance" (default, all features enabled), "balanced" (moderate memory usage),
+#          "low-memory" (minimal memory footprint)
+# If not specified, defaults to "performance"
+# Added on 2025-11-24
+# rust_analyzer_profile: "balanced"
+
 # whether to use the project's gitignore file to ignore files
 # Added on 2025-04-07
 ignore_all_files_in_gitignore: true

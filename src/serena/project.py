@@ -382,12 +382,23 @@ class Project(ToStringMixin):
             self.language_server_manager = None
 
         log.info(f"Creating language server manager for {self.project_root}")
+        # Merge project-specific rust-analyzer profile into ls_specific_settings
+        merged_ls_settings = (ls_specific_settings or {}).copy()
+        if self.project_config.rust_analyzer_profile is not None:
+            from solidlsp.ls_config import Language
+
+            if Language.RUST not in merged_ls_settings:
+                merged_ls_settings[Language.RUST] = {}
+            # Only set the profile if not already explicitly set in ls_specific_settings
+            if "profile" not in merged_ls_settings[Language.RUST]:
+                merged_ls_settings[Language.RUST]["profile"] = self.project_config.rust_analyzer_profile
+
         factory = LanguageServerFactory(
             project_root=self.project_root,
             encoding=self.project_config.encoding,
             ignored_patterns=self._ignored_patterns,
             ls_timeout=ls_timeout,
-            ls_specific_settings=ls_specific_settings,
+            ls_specific_settings=merged_ls_settings,
             log_level=log_level,
             trace_lsp_communication=trace_lsp_communication,
         )

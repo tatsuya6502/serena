@@ -7,7 +7,8 @@ import os
 import pathlib
 import subprocess
 import threading
-from typing import cast
+from enum import Enum
+from typing import Any, cast
 
 from overrides import override
 
@@ -19,10 +20,73 @@ from solidlsp.lsp_protocol_handler.server import ProcessLaunchInfo
 from solidlsp.settings import SolidLSPSettings
 
 
+class RustAnalyzerProfile(Enum):
+    """Memory and performance profiles for rust-analyzer."""
+
+    PERFORMANCE = "performance"
+    BALANCED = "balanced"
+    LOW_MEMORY = "low-memory"
+
+
 class RustAnalyzer(SolidLanguageServer):
     """
     Provides Rust specific instantiation of the LanguageServer class. Contains various configurations and settings specific to Rust.
     """
+
+    @staticmethod
+    def get_profile_settings(profile: str) -> dict[str, Any]:
+        """
+        Get rust-analyzer initialization settings for the specified memory profile.
+
+        :param profile: Profile name ("performance", "balanced", or "low-memory")
+        :return: Dictionary of settings to merge into initializationOptions
+        """
+        try:
+            profile_enum = RustAnalyzerProfile(profile)
+        except ValueError:
+            # Invalid profile name, return empty dict (will use defaults)
+            return {}
+
+        if profile_enum == RustAnalyzerProfile.PERFORMANCE:
+            # Current defaults - all features enabled for maximum performance
+            return {}
+
+        elif profile_enum == RustAnalyzerProfile.BALANCED:
+            # Moderate memory usage while maintaining good functionality
+            return {
+                "cachePriming": {"enable": False},
+                "lru": {"capacity": 64},
+                "checkOnSave": False,
+                "check": {"allTargets": False},
+            }
+
+        else:  # RustAnalyzerProfile.LOW_MEMORY
+            # Minimal memory footprint - disable expensive features
+            return {
+                "cachePriming": {"enable": False},
+                "lru": {"capacity": 32},
+                "cargo": {"buildScripts": {"enable": False}},
+                "procMacro": {"enable": False},
+                "checkOnSave": False,
+                "check": {"allTargets": False},
+            }
+
+    @staticmethod
+    def _deep_merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+        """
+        Deep merge two dictionaries, with override values taking precedence.
+
+        :param base: Base dictionary
+        :param override: Dictionary with override values
+        :return: Merged dictionary
+        """
+        result = base.copy()
+        for key, value in override.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = RustAnalyzer._deep_merge_dict(result[key], value)
+            else:
+                result[key] = value
+        return result
 
     @staticmethod
     def _determine_log_level(line: str) -> int:
@@ -104,6 +168,14 @@ class RustAnalyzer(SolidLanguageServer):
         rustanalyzer_executable_path = self._ensure_rust_analyzer_installed()
         logger.log(f"Using rust-analyzer at: {rustanalyzer_executable_path}", logging.INFO)
 
+        # Read profile from language-specific settings
+        from solidlsp.ls_config import Language
+
+        ls_settings = solidlsp_settings.get_ls_specific_settings(Language.RUST)
+        self.profile = ls_settings.get("profile", "performance")
+        if self.profile != "performance":
+            logger.log(f"Using rust-analyzer profile: {self.profile}", logging.INFO)
+
         super().__init__(
             config,
             logger,
@@ -122,9 +194,12 @@ class RustAnalyzer(SolidLanguageServer):
         return super().is_ignored_dirname(dirname) or dirname in ["target"]
 
     @staticmethod
-    def _get_initialize_params(repository_absolute_path: str) -> InitializeParams:
+    def _get_initialize_params(repository_absolute_path: str, profile: str = "performance") -> InitializeParams:
         """
         Returns the initialize params for the Rust Analyzer Language Server.
+
+        :param repository_absolute_path: Absolute path to the repository
+        :param profile: Memory profile to use ("performance", "balanced", or "low-memory")
         """
         root_uri = pathlib.Path(repository_absolute_path).as_uri()
         initialize_params = {
@@ -593,6 +668,14 @@ class RustAnalyzer(SolidLanguageServer):
                 }
             ],
         }
+
+        # Apply profile-specific settings
+        profile_settings = RustAnalyzer.get_profile_settings(profile)
+        if profile_settings:
+            initialize_params["initializationOptions"] = RustAnalyzer._deep_merge_dict(
+                initialize_params["initializationOptions"], profile_settings  # type: ignore
+            )
+
         return cast(InitializeParams, initialize_params)
 
     def _start_server(self) -> None:
@@ -639,7 +722,7 @@ class RustAnalyzer(SolidLanguageServer):
 
         self.logger.log("Starting RustAnalyzer server process", logging.INFO)
         self.server.start()
-        initialize_params = self._get_initialize_params(self.repository_root_path)
+        initialize_params = self._get_initialize_params(self.repository_root_path, self.profile)
 
         self.logger.log(
             "Sending initialize request from LSP client to LSP server and awaiting response",
