@@ -718,7 +718,7 @@ class RustAnalyzer(SolidLanguageServer):
         def execute_client_command_handler(params: dict) -> list:
             return []
 
-        def progress_handler(params):
+        def progress_handler(params: dict) -> None:
             """
             Track $/progress notifications to determine when indexing is complete.
             rust-analyzer sends progress notifications like:
@@ -752,7 +752,7 @@ class RustAnalyzer(SolidLanguageServer):
         def window_log_message(msg: dict) -> None:
             self.logger.log(f"LSP: window/logMessage: {msg}", logging.INFO)
 
-        def do_nothing(params):
+        def do_nothing(params: dict) -> None:
             return
 
         self.server.on_request("client/registerCapability", register_capability_handler)
